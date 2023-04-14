@@ -48,7 +48,7 @@ class RandomShiftsAug(nn.Module):
 class Encoder(nn.Module):
     def __init__(self, obs_shape):
         super().__init__()
-
+        # breakpoint()
         assert len(obs_shape) == 3
         self.repr_dim = 32 * 35 * 35
 
