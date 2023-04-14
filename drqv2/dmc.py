@@ -77,29 +77,29 @@ class FrameStackWrapper(gym.Wrapper):
     def __init__(self, env, num_frames):
         super().__init__(env)
         self._num_frames = num_frames
-        self._frames = deque(maxlen=num_frames)
-        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self._num_frames,) + env.observation_space, dtype=np.uint8)
+        self._frames = deque([], maxlen=num_frames)
+        obs_shape = self.env.observation_space # (32,32,3)
+        obs_shape = (obs_shape[2] * num_frames, obs_shape[0], obs_shape[1])
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=obs_shape, dtype=np.uint8)
 
     def _transform_observation(self, observation):
         assert len(self._frames) == self._num_frames
         obs = np.concatenate(list(self._frames), axis=0)
         return obs
 
-    def _extract_pixels(self, time_step):
-        pixels = time_step.observation[self._pixels_key]
-        # remove batch dim
-        if len(pixels.shape) == 4:
-            pixels = pixels[0]
-        return pixels.transpose(2, 0, 1).copy()
+    def _extract_pixels(self, observation):
+        return observation.transpose(2, 0, 1).copy()
 
     def reset(self):
         observation = self.env.reset()
+        observation = self._extract_pixels(observation)
         for _ in range(self._num_frames):
             self._frames.append(observation)
         return self._transform_observation(observation)
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
+        observation = self._extract_pixels(observation)
         self._frames.append(observation)
         return self._transform_observation(observation), reward, done, info
 
@@ -153,7 +153,6 @@ def make(frame_stack):
     env = gym.make('carla-v0', params=params)
     if frame_stack > 1:
         env = FrameStackWrapper(env, frame_stack)
-    env = ActionDTypeWrapper(env, np.float32)
+    # env = ActionDTypeWrapper(env, np.float32)
     env = ExtendedTimeStepWrapper(env)
-
     return env
