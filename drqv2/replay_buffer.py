@@ -11,6 +11,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 import torch.nn as nn
+import gym
 from torch.utils.data import IterableDataset
 
 
@@ -46,19 +47,29 @@ class ReplayBufferStorage:
         return self._num_transitions
 
     def add(self, time_step):
-        for spec in self._data_specs:
-            value = time_step[spec.name]
-            if np.isscalar(value):
-                value = np.full(spec.shape, value, spec.dtype)
-            assert spec.shape == value.shape and spec.dtype == value.dtype
-            self._current_episode[spec.name].append(value)
-        if time_step.last():
+        for i, spec in enumerate(self._data_specs):
+            if isinstance(spec, gym.spaces.Box):
+                name = 'observation' if i == 0 else 'action'
+                value = time_step[i]
+                if np.isscalar(value):
+                    value = np.full(spec.shape, value, spec.dtype)
+                assert spec.shape == value.shape and spec.dtype == value.dtype
+                self._current_episode[name].append(value)
+            else:
+                value = time_step[i]
+                self._current_episode["reward"].append(value)
+        
+        if time_step.done:
             episode = dict()
-            for spec in self._data_specs:
-                value = self._current_episode[spec.name]
-                episode[spec.name] = np.array(value, spec.dtype)
-            self._current_episode = defaultdict(list)
-            self._store_episode(episode)
+            for i, spec in enumerate(self._data_specs):
+                if isinstance(spec, gym.spaces.Box):
+                    name = 'observation' if i == 0 else 'action'
+                    value = self._current_episode[name]
+                else:
+                    name = "reward"
+                    value = self._current_episode["reward"]
+                episode[name] = np.array(value, spec.dtype)
+
 
     def _preload(self):
         self._num_episodes = 0

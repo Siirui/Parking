@@ -3,7 +3,6 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 from collections import deque
-from typing import Any, NamedTuple
 
 import numpy as np
 import sys
@@ -11,23 +10,41 @@ sys.path.append("home/siri/Desktop/Parking/gym_carla")
 import gym_carla
 import gym
 
+params = {
+    'number_of_vehicles': 0,
+    'number_of_walkers': 0,
+    'display_size': 256,  # screen size of bird-eye render
+    'max_past_step': 1,  # the number of past steps to draw
+    'dt': 0.1,  # time interval between two frames
+    'discrete': False,  # whether to use discrete control space
+    'discrete_acc': [-3.0, 0.0, 3.0],  # discrete value of accelerations
+    'discrete_steer': [-0.2, 0.0, 0.2],  # discrete value of steering angles
+    'continuous_accel_range': [-3.0, 3.0],  # continuous acceleration range
+    'continuous_steer_range': [-0.3, 0.3],  # continuous steering angle range
+    'ego_vehicle_filter': 'vehicle.lincoln*',  # filter for defining ego vehicle
+    'port': 2000,  # connection port
+    'town': 'Town04',  # which town to simulate
+    'task_mode': 'roundabout',  # mode of the task, [random, roundabout (only for Town03)]
+    'max_time_episode': 1000,  # maximum timesteps per episode
+    'max_waypt': 12,  # maximum number of waypoints
+    'obs_range': 32,  # observation range (meter)
+    'lidar_bin': 1,  # bin size of lidar sensor (meter)
+    'd_behind': 12,  # distance behind the ego vehicle (meter)
+    'out_lane_thres': 2.0,  # threshold for out of lane
+    'desired_speed': 8,  # desired speed (m/s)
+    'max_ego_spawn_times': 200,  # maximum times to spawn ego vehicle
+    'display_route': True,  # whether to render the desired route
+    'pixor_size': 64,  # size of the pixor labels
+    'pixor': False,  # whether to output PIXOR observation
+}
 
-
-class ExtendedTimeStep(NamedTuple):
-    step_type: Any
-    reward: Any
-    discount: Any
-    observation: Any
-    action: Any
-
-    def first(self):
-        return self.step_type == StepType.FIRST
-
-    def mid(self):
-        return self.step_type == StepType.MID
-
-    def last(self):
-        return self.step_type == StepType.LAST
+class ExtendedTimeStep:
+    def __init__(self, observation, reward, done, info, action) -> None:
+        self.observation = observation
+        self.reward = reward
+        self.done = done
+        self.info = info
+        self.action = action
 
     def __getitem__(self, attr):
         if isinstance(attr, str):
@@ -35,62 +52,38 @@ class ExtendedTimeStep(NamedTuple):
         else:
             return tuple.__getitem__(self, attr)
 
-
-class ActionRepeatWrapper(dm_env.Environment):
+class ActionRepeatWrapper(gym.Wrapper):
     def __init__(self, env, num_repeats):
-        self._env = env
+        super().__init__(env)
         self._num_repeats = num_repeats
 
     def step(self, action):
         reward = 0.0
-        discount = 1.0
         for i in range(self._num_repeats):
-            time_step = self._env.step(action)
-            reward += (time_step.reward or 0.0) * discount
-            discount *= time_step.discount
-            if time_step.last():
+            observation, reward_, done, info = self.env.step(action)
+            reward += reward_
+            if done:
                 break
 
-        return time_step._replace(reward=reward, discount=discount)
+        return ExtendedTimeStep(observation, reward, done, info, action)
 
     def observation_spec(self):
-        return self._env.observation_spec()
+        return self.env.observation_space
 
     def action_spec(self):
-        return self._env.action_spec()
+        return self.env.action_space
 
-    def reset(self):
-        return self._env.reset()
-
-    def __getattr__(self, name):
-        return getattr(self._env, name)
-
-
-class FrameStackWrapper(dm_env.Environment):
-    def __init__(self, env, num_frames, pixels_key='pixels'):
-        self._env = env
+class FrameStackWrapper(gym.Wrapper):
+    def __init__(self, env, num_frames):
+        super().__init__(env)
         self._num_frames = num_frames
-        self._frames = deque([], maxlen=num_frames)
-        self._pixels_key = pixels_key
+        self._frames = deque(maxlen=num_frames)
+        self.observation_space = gym.spaces.Box(low=0, high=255, shape=(self._num_frames,) + env.observation_space, dtype=np.uint8)
 
-        wrapped_obs_spec = env.observation_spec()
-        assert pixels_key in wrapped_obs_spec
-
-        pixels_shape = wrapped_obs_spec[pixels_key].shape
-        # remove batch dim
-        if len(pixels_shape) == 4:
-            pixels_shape = pixels_shape[1:]
-        self._obs_spec = specs.BoundedArray(shape=np.concatenate(
-            [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
-                                            dtype=np.uint8,
-                                            minimum=0,
-                                            maximum=255,
-                                            name='observation')
-
-    def _transform_observation(self, time_step):
+    def _transform_observation(self, observation):
         assert len(self._frames) == self._num_frames
         obs = np.concatenate(list(self._frames), axis=0)
-        return time_step._replace(observation=obs)
+        return obs
 
     def _extract_pixels(self, time_step):
         pixels = time_step.observation[self._pixels_key]
@@ -100,115 +93,67 @@ class FrameStackWrapper(dm_env.Environment):
         return pixels.transpose(2, 0, 1).copy()
 
     def reset(self):
-        time_step = self._env.reset()
-        pixels = self._extract_pixels(time_step)
+        observation = self.env.reset()
         for _ in range(self._num_frames):
-            self._frames.append(pixels)
-        return self._transform_observation(time_step)
+            self._frames.append(observation)
+        return self._transform_observation(observation)
 
     def step(self, action):
-        time_step = self._env.step(action)
-        pixels = self._extract_pixels(time_step)
-        self._frames.append(pixels)
-        return self._transform_observation(time_step)
+        observation, reward, done, info = self.env.step(action)
+        self._frames.append(observation)
+        return self._transform_observation(observation), reward, done, info
 
     def observation_spec(self):
-        return self._obs_spec
+        return self.observation_space
 
     def action_spec(self):
-        return self._env.action_spec()
+        return self.env.action_space
 
-    def __getattr__(self, name):
-        return getattr(self._env, name)
-
-
-class ActionDTypeWrapper(dm_env.Environment):
+class ActionDTypeWrapper(gym.Wrapper):
     def __init__(self, env, dtype):
-        self._env = env
-        wrapped_action_spec = env.action_spec()
-        self._action_spec = specs.BoundedArray(wrapped_action_spec.shape,
-                                               dtype,
-                                               wrapped_action_spec.minimum,
-                                               wrapped_action_spec.maximum,
-                                               'action')
+        super().__init__(env)
+        self._dtype = dtype
 
     def step(self, action):
-        action = action.astype(self._env.action_spec().dtype)
-        return self._env.step(action)
+        action = action.astype(self._dtype)
+        return self.env.step(action)
 
     def observation_spec(self):
-        return self._env.observation_spec()
+        return self.env.observation_space
 
     def action_spec(self):
-        return self._action_spec
+        return gym.spaces.Box(low=self.env.action_space.low.astype(self._dtype), 
+                              high=self.env.action_space.high.astype(self._dtype),
+                              dtype=self._dtype)
 
     def reset(self):
-        return self._env.reset()
+        return self.env.reset()
 
-    def __getattr__(self, name):
-        return getattr(self._env, name)
-
-
-class ExtendedTimeStepWrapper(dm_env.Environment):
+class ExtendedTimeStepWrapper(gym.Wrapper):
     def __init__(self, env):
-        self._env = env
+        super().__init__(env)
 
     def reset(self):
-        time_step = self._env.reset()
-        return self._augment_time_step(time_step)
+        observation = self.env.reset()
+        action = np.zeros(self.env.action_space, dtype=self.env.action_space.dtype)
+        return ExtendedTimeStep(observation, 0, False, {}, action)
 
     def step(self, action):
-        time_step = self._env.step(action)
-        return self._augment_time_step(time_step, action)
-
-    def _augment_time_step(self, time_step, action=None):
-        if action is None:
-            action_spec = self.action_spec()
-            action = np.zeros(action_spec.shape, dtype=action_spec.dtype)
-        return ExtendedTimeStep(observation=time_step.observation,
-                                step_type=time_step.step_type,
-                                action=action,
-                                reward=time_step.reward or 0.0,
-                                discount=time_step.discount or 1.0)
-
+        observation, reward, done, info = self.env.step(action)
+        return ExtendedTimeStep(observation, reward, done, info, action)
+    
     def observation_spec(self):
-        return self._env.observation_spec()
+        return self.env.observation_space
 
     def action_spec(self):
-        return self._env.action_spec()
+        return self.env.action_space
 
-    def __getattr__(self, name):
-        return getattr(self._env, name)
+def make(frame_stack):
 
-
-def make(name, frame_stack, action_repeat, seed):
-    domain, task = name.split('_', 1)
-    # overwrite cup to ball_in_cup
-    domain = dict(cup='ball_in_cup').get(domain, domain)
-    # make sure reward is not visualized
-    if (domain, task) in suite.ALL_TASKS:
-        env = suite.load(domain,
-                         task,
-                         task_kwargs={'random': seed},
-                         visualize_reward=False)
-        pixels_key = 'pixels'
-    else:
-        name = f'{domain}_{task}_vision'
-        env = manipulation.load(name, seed=seed)
-        pixels_key = 'front_close'
-    # add wrappers
+    env = gym.make('carla-v0', params=params)
+    if frame_stack > 1:
+        env = FrameStackWrapper(env, frame_stack)
     env = ActionDTypeWrapper(env, np.float32)
-    env = ActionRepeatWrapper(env, action_repeat)
-    env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
-    # add renderings for clasical tasks
-    if (domain, task) in suite.ALL_TASKS:
-        # zoom in camera for quadruped
-        camera_id = dict(quadruped=2).get(domain, 0)
-        render_kwargs = dict(height=84, width=84, camera_id=camera_id)
-        env = pixels.Wrapper(env,
-                             pixels_only=True,
-                             render_kwargs=render_kwargs)
-    # stack several frames
-    env = FrameStackWrapper(env, frame_stack, pixels_key)
     env = ExtendedTimeStepWrapper(env)
+
     return env
