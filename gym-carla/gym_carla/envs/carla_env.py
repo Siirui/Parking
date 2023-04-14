@@ -95,8 +95,8 @@ class CarlaEnv(gym.Env):
         })
     # self.observation_space = spaces.Dict(observation_space_dict)
     # self.observation_space = spaces.Box(low=0, high=255, shape=(3, self.obs_size, self.obs_size), dtype=np.uint8)
-    self.observation_space = (3, self.obs_size, self.obs_size)
-    print("observation_space", self.observation_space)
+
+    self.observation_space = (self.obs_size, self.obs_size, 3)
     # Connect to carla server and get world object
     print('connecting to Carla server...')
     client = carla.Client('localhost', params['port'])
@@ -632,7 +632,7 @@ class CarlaEnv(gym.Env):
         'pixor_state': pixor_state,
       })
 
-    lidar = lidar.transpose(2, 0, 1)
+    # lidar = lidar.transpose(2, 0, 1)
     # print(lidar.shape)
     return lidar
 
