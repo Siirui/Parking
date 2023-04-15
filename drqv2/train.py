@@ -171,6 +171,10 @@ class Workspace:
                                 self.global_frame)
                 self.eval()
 
+                time_step = self.train_env.reset()
+                self.replay_storage.add(time_step)
+                continue
+
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):
                 action = self.agent.act(time_step.observation,

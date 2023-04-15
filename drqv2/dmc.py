@@ -26,7 +26,7 @@ params = {
     'port': 2000,  # connection port
     'town': 'Town04',  # which town to simulate
     'task_mode': 'roundabout',  # mode of the task, [random, roundabout (only for Town03)]
-    'max_time_episode': 500,  # maximum timesteps per episode
+    'max_time_episode': 1000,  # maximum timesteps per episode
     'max_waypt': 12,  # maximum number of waypoints
     'obs_range': 32,  # observation range (meter)
     'lidar_bin': 1,  # bin size of lidar sensor (meter)

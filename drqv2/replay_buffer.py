@@ -48,18 +48,18 @@ class ReplayBufferStorage:
 
     def add(self, time_step):
         for i, spec in enumerate(self._data_specs):
-            value = time_step[name]
             if isinstance(spec, gym.spaces.Box):
                 name = 'observation' if i == 0 else 'action'
                 # breakpoint()
+                value = time_step[name]
                 assert spec.shape == value.shape and spec.dtype == value.dtype
                 self._current_episode[name].append(value)
             else:
                 name = "reward" if i == 2 else "discount"
+                value = time_step[name]
                 value = np.full((1,), value, np.float32)
-                assert (1,) == value.shape and np.float32 == value.dtype
-            
-            self._current_episode[name].append(value)
+                assert (1,) == value.shape and np.float32 == value.dtype        
+                self._current_episode[name].append(value)
 
         if time_step.done:
             episode = dict()
@@ -92,6 +92,9 @@ class ReplayBufferStorage:
         self._num_transitions += eps_len
         ts = datetime.datetime.now().strftime('%Y%m%dT%H%M%S')
         eps_fn = f'{ts}_{eps_idx}_{eps_len}.npz'
+        # breakpoint()
+        # if episode["reward"].shape < 10:
+        #     print(episode["reward"].shape)
         save_episode(episode, self._replay_dir / eps_fn)
 
 
@@ -164,6 +167,9 @@ class ReplayBuffer(IterableDataset):
         self._samples_since_last_fetch += 1
         episode = self._sample_episode()
         # add +1 for the first dummy transition
+        if episode_len(episode) - self._nstep + 1 < 10:
+            print("rand_range", episode_len(episode) - self._nstep + 1)
+            print("reward_len", len(episode['reward']))
         idx = np.random.randint(0, episode_len(episode) - self._nstep + 1) + 1
         obs = episode['observation'][idx - 1]
         action = episode['action'][idx]
