@@ -48,29 +48,33 @@ class ReplayBufferStorage:
 
     def add(self, time_step):
         for i, spec in enumerate(self._data_specs):
+            value = time_step[name]
             if isinstance(spec, gym.spaces.Box):
                 name = 'observation' if i == 0 else 'action'
                 # breakpoint()
-                value = time_step[name]
-                if np.isscalar(value):
-                    value = np.full(spec.shape, value, spec.dtype)
                 assert spec.shape == value.shape and spec.dtype == value.dtype
                 self._current_episode[name].append(value)
             else:
-                value = time_step[name]
-                self._current_episode["reward"].append(value)
-        
+                name = "reward" if i == 2 else "discount"
+                value = np.full((1,), value, np.float32)
+                assert (1,) == value.shape and np.float32 == value.dtype
+            
+            self._current_episode[name].append(value)
+
         if time_step.done:
             episode = dict()
             for i, spec in enumerate(self._data_specs):
                 if isinstance(spec, gym.spaces.Box):
                     name = 'observation' if i == 0 else 'action'
                     value = self._current_episode[name]
+                    episode[name] = np.array(value, spec.dtype)
                 else:
-                    name = "reward"
-                    value = self._current_episode["reward"]
+                    name = "reward" if i == 2 else "discount"
+                    value = self._current_episode[name]
                 # breakpoint()
-                episode[name] = np.array(value)
+                    episode[name] = np.array(value, np.float32)
+            self._current_episode = defaultdict(list)
+            self._store_episode(episode)
 
 
     def _preload(self):
@@ -107,7 +111,6 @@ class ReplayBuffer(IterableDataset):
         self._save_snapshot = save_snapshot
 
     def _sample_episode(self):
-        print(self._episode_fns)
         eps_fn = random.choice(self._episode_fns)
         return self._episodes[eps_fn]
 
@@ -200,5 +203,6 @@ def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
                                          batch_size=batch_size,
                                          num_workers=num_workers,
                                          pin_memory=True,
-                                         worker_init_fn=_worker_init_fn)
+                                         worker_init_fn=_worker_init_fn
+                                         )
     return loader

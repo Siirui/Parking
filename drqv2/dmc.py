@@ -40,12 +40,13 @@ params = {
 }
 
 class ExtendedTimeStep:
-    def __init__(self, observation, reward, done, info, action) -> None:
+    def __init__(self, observation, reward, done, info, action, discount) -> None:
         self.observation = observation
         self.reward = reward
         self.done = done
         self.info = info
         self.action = action
+        self.discount = discount
 
     def __getitem__(self, attr):
         if isinstance(attr, str):
@@ -99,10 +100,10 @@ class FrameStackWrapper(gym.Wrapper):
         return self._transform_observation(observation)
 
     def step(self, action):
-        observation, reward, done, info = self.env.step(action)
+        observation, reward, done, info, discount = self.env.step(action)
         observation = self._extract_pixels(observation)
         self._frames.append(observation)
-        return self._transform_observation(observation), reward, done, info
+        return self._transform_observation(observation), reward, done, info, discount
 
     def observation_spec(self):
         return self.observation_space
@@ -137,11 +138,11 @@ class ExtendedTimeStepWrapper(gym.Wrapper):
     def reset(self):
         observation = self.env.reset()
         action = np.zeros(self.env.action_space.shape, dtype=self.env.action_space.dtype)
-        return ExtendedTimeStep(observation, 0, False, {}, action)
+        return ExtendedTimeStep(observation, 0, False, {}, action, 1)
 
     def step(self, action):
-        observation, reward, done, info = self.env.step(action)
-        return ExtendedTimeStep(observation, reward, done, info, action)
+        observation, reward, done, info, discount = self.env.step(action)
+        return ExtendedTimeStep(observation, reward, done, info, action, discount)
     
     def observation_spec(self):
         return self.env.observation_space

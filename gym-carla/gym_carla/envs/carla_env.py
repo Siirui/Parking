@@ -97,6 +97,8 @@ class CarlaEnv(gym.Env):
     # self.observation_space = spaces.Box(low=0, high=255, shape=(3, self.obs_size, self.obs_size), dtype=np.uint8)
 
     self.observation_space = (self.obs_size, self.obs_size, 3)
+    self.discount = 1
+    self.gamma = 0.99
 
     # Connect to carla server and get world object
     print('connecting to Carla server...')
@@ -339,7 +341,8 @@ class CarlaEnv(gym.Env):
     self.time_step += 1
     self.total_step += 1
 
-    return (self._get_obs(), self._get_reward(), self._terminal(), copy.deepcopy(info))
+    self.discount *= self.gamma
+    return (self._get_obs(), self._get_reward(), self._terminal(), copy.deepcopy(info), self.discount)
 
   def seed(self, seed=None):
     self.np_random, seed = seeding.np_random(seed)

@@ -7,9 +7,10 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 import os
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
-os.environ['MUJOCO_GL'] = 'egl'
 
 from pathlib import Path
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 
 import hydra
 import numpy as np
@@ -59,6 +60,7 @@ class Workspace:
         # create replay buffer
         data_specs = (self.train_env.observation_spec(),
                       self.train_env.action_spec(),
+                      np.float32,
                       np.float32)
 
         self.replay_storage = ReplayBufferStorage(data_specs,
@@ -164,10 +166,10 @@ class Workspace:
                 episode_reward = 0
 
             # try to evaluate
-            # if eval_every_step(self.global_step):
-            #     self.logger.log('eval_total_time', self.timer.total_time(),
-            #                     self.global_frame)
-            #     self.eval()
+            if eval_every_step(self.global_step):
+                self.logger.log('eval_total_time', self.timer.total_time(),
+                                self.global_frame)
+                self.eval()
 
             # sample action
             with torch.no_grad(), utils.eval_mode(self.agent):

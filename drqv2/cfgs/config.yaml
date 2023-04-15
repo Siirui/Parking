@@ -4,11 +4,11 @@ defaults:
   - override hydra/launcher: submitit_local
 
 # task settings
-frame_stack: 3
+frame_stack: 5
 action_repeat: 1
 discount: 0.99
 # train settings
-num_seed_frames: 500
+num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
 num_eval_episodes: 10
@@ -16,7 +16,7 @@ num_eval_episodes: 10
 save_snapshot: false
 # replay buffer
 replay_buffer_size: 1000000
-replay_buffer_num_workers: 4
+replay_buffer_num_workers: 1
 nstep: 3
 batch_size: 256
 # misc
