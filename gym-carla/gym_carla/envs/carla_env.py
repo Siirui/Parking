@@ -97,6 +97,7 @@ class CarlaEnv(gym.Env):
     # self.observation_space = spaces.Box(low=0, high=255, shape=(3, self.obs_size, self.obs_size), dtype=np.uint8)
 
     self.observation_space = (self.obs_size, self.obs_size, 3)
+
     # Connect to carla server and get world object
     print('connecting to Carla server...')
     client = carla.Client('localhost', params['port'])
@@ -117,7 +118,11 @@ class CarlaEnv(gym.Env):
         spawn_point.location = loc
         self.walker_spawn_points.append(spawn_point)
 
-    # Create the ego vehicl    pdb.set_trace()
+    self.ego_bp = self._create_vehicle_bluepprint(params['ego_vehicle_filter'], color='49,8,8')
+    self.collision_hist = []
+    self.collision_hist_l = 1
+    self.collision_bp = self.world.get_blueprint_library().find('sensor.other.collision')
+
     # Lidar sensor
     self.lidar_data = None
     self.lidar_height = 2.1
@@ -634,7 +639,7 @@ class CarlaEnv(gym.Env):
 
     # lidar = lidar.transpose(2, 0, 1)
     # print(lidar.shape)
-    return lidar
+    return lidar.astype(np.uint8)
 
   def _get_reward(self):
     """Calculate the step reward."""
@@ -687,7 +692,7 @@ class CarlaEnv(gym.Env):
     # r = 20000 * r_collision + 30000 * r_success + r_d + dis_penalty + speed_penalty
     r = -1000 * timeout + r_success * 5000 + r_dis * 50  - 1 + r_collision * 3000
 
-    print(f"dis: {dis:.4f}", f"r_dis: {r_dis * 50:.4f}")
+    # print(f"dis: {dis:.4f}", f"r_dis: {r_dis * 50:.4f}")
     return r
 
   def _terminal(self):

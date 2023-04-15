@@ -50,13 +50,14 @@ class ReplayBufferStorage:
         for i, spec in enumerate(self._data_specs):
             if isinstance(spec, gym.spaces.Box):
                 name = 'observation' if i == 0 else 'action'
-                value = time_step[i]
+                # breakpoint()
+                value = time_step[name]
                 if np.isscalar(value):
                     value = np.full(spec.shape, value, spec.dtype)
                 assert spec.shape == value.shape and spec.dtype == value.dtype
                 self._current_episode[name].append(value)
             else:
-                value = time_step[i]
+                value = time_step[name]
                 self._current_episode["reward"].append(value)
         
         if time_step.done:
@@ -68,7 +69,8 @@ class ReplayBufferStorage:
                 else:
                     name = "reward"
                     value = self._current_episode["reward"]
-                episode[name] = np.array(value, spec.dtype)
+                # breakpoint()
+                episode[name] = np.array(value)
 
 
     def _preload(self):
@@ -105,6 +107,7 @@ class ReplayBuffer(IterableDataset):
         self._save_snapshot = save_snapshot
 
     def _sample_episode(self):
+        print(self._episode_fns)
         eps_fn = random.choice(self._episode_fns)
         return self._episodes[eps_fn]
 

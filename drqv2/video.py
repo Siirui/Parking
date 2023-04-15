@@ -37,6 +37,7 @@ class VideoRecorder:
     def save(self, file_name):
         if self.enabled:
             path = self.save_dir / file_name
+            breakpoint()
             imageio.mimsave(str(path), self.frames, fps=self.fps)
 
 

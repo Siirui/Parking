@@ -50,7 +50,8 @@ class Encoder(nn.Module):
         super().__init__()
         # breakpoint()
         assert len(obs_shape) == 3
-        self.repr_dim = 32 * 35 * 35
+        # self.repr_dim = 32 * 35 * 35
+        self.repr_dim = 2592
 
         self.convnet = nn.Sequential(nn.Conv2d(obs_shape[0], 32, 3, stride=2),
                                      nn.ReLU(), nn.Conv2d(32, 32, 3, stride=1),
@@ -163,8 +164,10 @@ class DrQV2Agent:
 
     def act(self, obs, step, eval_mode):
         obs = torch.as_tensor(obs, device=self.device)
+        # breakpoint()
         obs = self.encoder(obs.unsqueeze(0))
         stddev = utils.schedule(self.stddev_schedule, step)
+        # breakpoint()
         dist = self.actor(obs, stddev)
         if eval_mode:
             action = dist.mean
@@ -232,6 +235,7 @@ class DrQV2Agent:
 
         if step % self.update_every_steps != 0:
             return metrics
+
 
         batch = next(replay_iter)
         obs, action, reward, discount, next_obs = utils.to_torch(
